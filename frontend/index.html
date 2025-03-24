@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF & Manual Text Test Case Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Automated Test Case Generator</h2>
+        <hr><br>
+        
+        <!-- PDF Upload Section -->
+        <label class="upload-btn" for="pdfInput"><i class="fa fa-upload"></i> Choose File</label>
+        <input type="file" id="pdfInput" accept="application/pdf" style="display: none;" onchange="showFileName()">
+        <p id="fileInfo" class="info-text">No file selected</p>
+        <button class="upload-btn" onclick="uploadPDF()">Extract Text</button>
+        
+        <!-- Manual Text Input Section -->
+        <textarea id="manualText" placeholder="Or type your text here..." rows="5"></textarea>
+        <button class="button" onclick="useManualText()">Use Manual Text</button>
+        
+        <div class="loading" id="loading" style="display: none;">🔄 Processing...</div>
+        <div class="output-container" id="output">Extracted or entered text will appear here...</div>
+        
+        <button class="button" onclick="generateTestCases()">Generate Test Cases</button>
+        <div class="loading" id="loadingTestCases" style="display: none;">🔄 Generating test cases...</div>
+
+        <!-- Section for displaying test cases -->
+        <h3>Generated Test Cases</h3>
+            <div id="testCasesContainer">
+                <table id="testCasesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Test Case</th>
+                            <th>Expected Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="testCasesBody">
+                        <tr><td colspan="3">Test cases will appear here...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+
+    <script>
+        function showFileName() {
+            const fileInput = document.getElementById("pdfInput");
+            const fileInfo = document.getElementById("fileInfo");
+            fileInfo.textContent = fileInput.files.length > 0 ? "Selected file: " + fileInput.files[0].name : "No file selected";
+        }
+
+        function uploadPDF() {
+            const fileInput = document.getElementById("pdfInput");
+            if (!fileInput.files.length) return alert("Select a PDF file!");
+
+            let formData = new FormData();
+            formData.append("pdf", fileInput.files[0]);
+
+            document.getElementById("loading").style.display = "block";
+            document.getElementById("output").textContent = "Extracting text...";
+
+            fetch("http://127.0.0.1:8000/extract-text", {
+                method: "POST",
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("loading").style.display = "none";
+                document.getElementById("output").textContent = data.text || "No text could be extracted.";
+            })
+            .catch(error => {
+                document.getElementById("loading").style.display = "none";
+                document.getElementById("output").textContent = "Error extracting text.";
+                console.error("Error extracting text:", error);
+            });
+        }
+
+        function useManualText() {
+            const manualText = document.getElementById("manualText").value.trim();
+            if (!manualText) return alert("Please enter some text!");
+            document.getElementById("output").textContent = manualText;
+        }
+
+        function generateTestCases() {
+        const extractedText = document.getElementById("output").textContent.trim();
+        const manualText = document.getElementById("manualText").value.trim();
+        let textToProcess = extractedText || manualText;
+
+        if (!textToProcess) {
+            alert("Please provide text either by uploading a PDF or entering manually!");
+            return;
+        }
+
+        document.getElementById("loadingTestCases").style.display = "block";
+        document.getElementById("testCasesBody").innerHTML = "<tr><td colspan='3'>Generating test cases...</td></tr>";
+
+        fetch("http://127.0.0.1:8000/generate-test-cases", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: textToProcess })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP Error! Status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            document.getElementById("loadingTestCases").style.display = "none";
+            console.log("✅ Received Test Cases:", data);
+
+            if (data.error) {
+                document.getElementById("testCasesBody").innerHTML = `<tr><td colspan="3" style="color: red;">Error: ${data.error}</td></tr>`;
+                return;
+            }
+
+            const testCases = data.test_cases || [];
+
+            if (!Array.isArray(testCases) || testCases.length === 0) {
+                document.getElementById("testCasesBody").innerHTML = "<tr><td colspan='3'>No test cases generated.</td></tr>";
+                return;
+            }
+
+            let tableRows = testCases.map(test => `
+                <tr>
+                    <td style="text-align: center;">${test.id}</td>
+                    <td>${test.test_case}</td>
+                    <td>${test.expected_result}</td>
+                </tr>
+            `).join("");
+
+            document.getElementById("testCasesBody").innerHTML = tableRows;
+        })
+        .catch(error => {
+            document.getElementById("loadingTestCases").style.display = "none";
+            document.getElementById("testCasesBody").innerHTML = "<tr><td colspan='3' style='color: red;'>Error generating test cases.</td></tr>";
+            console.error("❌ Error generating test cases:", error);
+        });
+    }
+    </script>
+</body>
+</html>
